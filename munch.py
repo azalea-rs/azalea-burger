@@ -10,7 +10,6 @@ from jawa.classloader import ClassLoader
 from jawa.transforms import expand_constants, simple_swap
 
 from burger import website
-from burger.mappings import Mappings, set_global_mappings
 from burger.roundedfloats import transform_floats
 
 
@@ -75,7 +74,6 @@ if __name__ == '__main__':
     )
     parser.add_argument('-c', '--compact', action='store_true')
     parser.add_argument('-l', '--list', action='store_true')
-    parser.add_argument('-m', '--mappings')
     parser.add_argument('-s', '--url')
     try:
         args = parser.parse_args()
@@ -88,7 +86,6 @@ if __name__ == '__main__':
     list_toppings = args.list
     compact = args.compact
     url = args.url
-    mappings_path = args.mappings
 
     version_name = None
     url_path = None
@@ -110,18 +107,6 @@ if __name__ == '__main__':
         # version name
         version_name = args.version
         client_path = website.client_jar(version_name)
-
-    if version_name and not mappings_path:
-        # download mappings
-        mappings_path = website.mappings_txt(args.version)
-
-    if not mappings_path:
-        sys.stderr.write(
-            'Version name was not passed explicitly, please provide mappings file using --mappings\n'
-        )
-        sys.exit(1)
-
-    set_global_mappings(Mappings.parse(open(mappings_path, 'r').read()))
 
     # Load all toppings
     all_toppings = import_toppings()

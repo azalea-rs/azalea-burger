@@ -3,7 +3,6 @@ import logging
 from jawa.classloader import ClassLoader
 from jawa.constants import ConstantClass, String
 
-from burger.mappings import MAPPINGS
 
 from .topping import Topping
 
@@ -103,7 +102,7 @@ def check_match(value, match_list):
     return False
 
 
-def identify(classloader: ClassLoader, path):
+def identify(classloader: ClassLoader, path: str):
     """
     The first pass across the jar will identify all possible classes it
     can, mapping them by the 'type' it implements.
@@ -113,8 +112,7 @@ def identify(classloader: ClassLoader, path):
     we'll have the initial mapping from this pass available to us.
     """
 
-    deobfuscated_name = path if '/' in path else MAPPINGS.deobfuscate_class_name(path)
-    if deobfuscated_name == 'net.minecraft.network.chat.Component':
+    if path == 'net/minecraft/network/chat/Component':
         return 'chatcomponent', path
 
     possible_match = None

@@ -5,7 +5,6 @@ from jawa.classloader import ClassLoader
 from jawa.constants import ConstantClass, String
 from jawa.util.descriptor import method_descriptor
 
-from burger.mappings import MAPPINGS
 from burger.util import WalkerCallback, class_from_invokedynamic, walk_method
 
 from .topping import Topping
@@ -78,16 +77,15 @@ class EntityTopping(Topping):
         # and in even older versions:
         # public static final EntityType<EntityAreaEffectCloud> AREA_EFFECT_CLOUD = register("area_effect_cloud", EntityType.Builder.create(EntityAreaEffectCloud::new)); // through 18w05a
 
-        entity_type_builder_cf = MAPPINGS.get_class_from_classloader(
-            classloader,
-            'net.minecraft.world.entity.EntityType$Builder',
+        entity_type_builder_cf = classloader[
+            'net/minecraft/world/entity/EntityType$Builder'
+        ]
+        set_size_method = entity_type_builder_cf.methods.find_one(name='sized')
+        assert set_size_method
+        set_eye_height_method = entity_type_builder_cf.methods.find_one(
+            name='eyeHeight'
         )
-        set_size_method = MAPPINGS.get_method_from_classfile(
-            entity_type_builder_cf, 'sized'
-        )
-        set_eye_height_method = MAPPINGS.get_method_from_classfile(
-            entity_type_builder_cf, 'eyeHeight'
-        )
+        assert set_eye_height_method
         print('set_eye_height_method', set_eye_height_method)
 
         class EntityContext(WalkerCallback):

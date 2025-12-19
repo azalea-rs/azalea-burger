@@ -6,6 +6,7 @@
 test.py
 build/
 venv/
+__pycache__
 
 *.java
 *.bat

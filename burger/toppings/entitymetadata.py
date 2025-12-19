@@ -417,7 +417,6 @@ class EntityMetadataTopping(Topping):
                                         bitfields_by_class[base_entity_cls] = []
                                     bitfields_by_class[base_entity_cls].append(
                                         {
-                                            # we include the class here so it can be easily figured out from the mappings
                                             'class': cls,
                                             'method': method.name.value,
                                             'mask': 1 << bitmask_value,

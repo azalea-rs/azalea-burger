@@ -73,20 +73,6 @@ def client_jar(version: str):
     return filename
 
 
-def mappings_txt(version: str):
-    """Downloads the mappings for a specific version, by name"""
-    filename = f'{version}-mappings.txt'
-    if not os.path.exists(filename):
-        meta = get_version_meta(version)
-        logging.debug(
-            f'For version {filename}, the downloads section of the meta is {meta["downloads"]}'
-        )
-        url = meta['downloads']['client_mappings']['url']
-        logging.info(f'Downloading {version} mappings from {url}')
-        urllib.request.urlretrieve(url, filename=filename)
-    return filename
-
-
 def latest_client_jar():
     manifest = get_version_manifest()
     return client_jar(manifest['latest']['snapshot'])

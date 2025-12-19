@@ -1,10 +1,11 @@
 import logging
 from typing import Optional
 
+import jawa.attributes.bootstrap
+import jawa.constants
 from jawa.classloader import ClassLoader
 from jawa.util.descriptor import method_descriptor
 
-from burger.mappings import MAPPINGS
 from burger.util import WalkerCallback, try_eval_lambda, walk_method
 
 from .topping import Topping
@@ -45,7 +46,7 @@ class BlocksTopping(Topping):
     def _process(aggregate, classloader: ClassLoader):
         # All of the registration happens in the list class in this version.
 
-        # net.minecraft.world.level.block.Blocks
+        # net/minecraft/world/level/block/Blocks
         blocks_class: str = aggregate['classes']['block.list']
         blocks_cf = classloader[blocks_class]
         # The first field in the list class is a block
@@ -117,34 +118,39 @@ class BlocksTopping(Topping):
                         break
         assert hardness_setter_3 is not None
 
-        block_behavior_cf = MAPPINGS.get_class_from_classloader(
-            classloader,
-            'net.minecraft.world.level.block.state.BlockBehaviour',
+        block_behavior_cf = classloader[
+            'net/minecraft/world/level/block/state/BlockBehaviour'
+        ]
+        assert block_behavior_cf
+        properties_cf = classloader[
+            'net/minecraft/world/level/block/state/BlockBehaviour$Properties'
+        ]
+        assert properties_cf
+        force_solid_on_setter = properties_cf.methods.find_one(name='forceSolidOn')
+        assert force_solid_on_setter
+        force_solid_off_setter = properties_cf.methods.find_one(name='forceSolidOff')
+        assert force_solid_off_setter
+        requires_correct_tool_for_drops_setter = properties_cf.methods.find_one(
+            name='requiresCorrectToolForDrops'
         )
-        properties_cf = MAPPINGS.get_class_from_classloader(
-            classloader,
-            'net.minecraft.world.level.block.state.BlockBehaviour$Properties',
-        )
-        force_solid_on_setter = MAPPINGS.get_method_from_classfile(
-            properties_cf, 'forceSolidOn'
-        )
-        force_solid_off_setter = MAPPINGS.get_method_from_classfile(
-            properties_cf, 'forceSolidOff'
-        )
-        requires_correct_tool_for_drops_setter = MAPPINGS.get_method_from_classfile(
-            properties_cf, 'requiresCorrectToolForDrops'
-        )
-        friction_setter = MAPPINGS.get_method_from_classfile(properties_cf, 'friction')
-        light_setter = MAPPINGS.get_method_from_classfile(properties_cf, 'lightLevel')
+        assert requires_correct_tool_for_drops_setter
+        friction_setter = properties_cf.methods.find_one(name='friction')
+        assert friction_setter
+        light_setter = properties_cf.methods.find_one(name='lightLevel')
+        assert light_setter
 
-        register_legacy_stair = MAPPINGS.get_method_from_classfile(
-            blocks_cf,
-            'registerLegacyStair',
-            args='java.lang.String,net.minecraft.world.level.block.Block',
+        register_legacy_stair = blocks_cf.methods.find_one(
+            name='registerLegacyStair',
+            args='Ljava/lang/String;Lnet/minecraft/world/level/block/Block;',
         )
-        stair_block_class: str = MAPPINGS.obfuscate_class_name(
-            'net.minecraft.world.level.block.StairBlock'
+        assert register_legacy_stair
+        stair_block_class = 'net/minecraft/world/level/block/StairBlock'
+        assert classloader[stair_block_class]
+
+        weathering_copper_blocks_class = (
+            'net/minecraft/world/level/block/WeatheringCopperBlocks'
         )
+        assert classloader[weathering_copper_blocks_class]
 
         blocks = aggregate.setdefault('blocks', {})
         block = blocks.setdefault('block', {})
@@ -173,6 +179,8 @@ class BlocksTopping(Topping):
                 method_name = const.name_and_type.name.value
                 method_desc = const.name_and_type.descriptor.value
                 desc = method_descriptor(method_desc)
+
+                print(len(desc.args), ins.mnemonic, const.class_.name.value, desc.args)
 
                 if ins.mnemonic == 'invokestatic':
                     if const.class_.name.value == blocks_class:
@@ -260,6 +268,42 @@ class BlocksTopping(Topping):
                             return copy
                         else:
                             return {}  # Append current block
+                    elif const.class_.name.value == weathering_copper_blocks_class:
+                        # public static final WeatheringCopperBlocks COPPER_BARS = WeatheringCopperBlocks.create(
+                        #     "copper_bars",
+                        #     Blocks::register,
+                        #     IronBarsBlock::new,
+                        #     WeatheringCopperBarsBlock::new,
+                        #     p -> BlockBehaviour.Properties.of().requiresCorrectToolForDrops().strength(5.0F, 6.0F).sound(SoundType.COPPER).noOcclusion()
+                        # );
+
+                        print('args', args)
+                        # exit()
+
+                        text_id = args[0]
+
+                        current_block = args[-1]
+                        if len(args) == 3 and isinstance(args[1], dict):
+                            # args[1] is what we got from the invokedynamic (like the AirBlock::new)
+                            current_block.update(args[1])
+
+                        # if 'class' not in current_block:
+                        current_block['text_id'] = text_id
+                        current_block['numeric_id'] = self.cur_id
+                        self.cur_id += 1
+                        current_block['display_name'] = get_display_name_for_block_id(
+                            text_id
+                        )
+
+                        if (
+                            method_name == register_legacy_stair.name.value
+                            and method_desc == register_legacy_stair.descriptor.value
+                        ):
+                            current_block['class'] = stair_block_class
+
+                        block[text_id] = current_block
+                        ordered_blocks.append(text_id)
+                        return current_block
                 else:
                     if method_name == 'hasNext':
                         # We've reached the end of block registration
@@ -369,6 +413,7 @@ class BlocksTopping(Topping):
                     return object()
 
             def on_put_field(self, ins, const, obj, value):
+                print('PUT FIELD', const.name_and_type.name.value, value)
                 if isinstance(value, dict):
                     field = const.name_and_type.name.value
                     value['field'] = field
@@ -386,6 +431,9 @@ class BlocksTopping(Topping):
                 # care about those.  The light level is a ToIntFunction<BlockState>.
                 method_desc: str = const.name_and_type.descriptor.value
                 desc = method_descriptor(method_desc)
+
+                print('invokedynamic!', ins, const, args)
+
                 if desc.returns.name in 'java/util/function/ToIntFunction':
                     # Try to invoke the function.
                     try:
@@ -394,19 +442,53 @@ class BlocksTopping(Topping):
                     except Exception as ex:
                         logging.debug(f'Failed to call lambda for light data: {ex}')
                         return None
-                # if it's a ::new then return {"class": class_name, "super": super_classes}
-                elif desc.returns.name == 'java/util/function/Function':
-                    # the constant pool looks like this, so...
-                    # 2263 = String             #2262        // air
-                    # 2264 = Utf8               dji
-                    # 2265 = Class              #2264        // dji
-                    # 2266 = Methodref          #2265.#1407  // dji."<init>":(Ldxt$d;)V
-                    # 2267 = MethodHandle       8:#2266      // REF_newInvokeSpecial dji."<init>":(Ldxt$d;)V      <-- this is what const.index-1 points to
-                    # 2268 = InvokeDynamic      #16:#1411    // #16:apply:()Ljava/util/function/Function;         <-- this is what const.index points to
-                    # i am aware this is cursed
+                elif desc.returns.name == 'java/util/function/BiFunction':
                     class_name = blocks_cf.constants.get(const.index - 1)
+                    print('bifunction:', class_name)
                     try:
                         class_name = class_name.reference.class_.name.value
+                        print('mrrp!!!!', class_name)
+                    except AttributeError:
+                        return object()
+                # if it's a ::new then return {"class": class_name, "super": super_classes}
+                elif desc.returns.name == 'java/util/function/Function':
+                    # 228
+                    bootstrap_method: jawa.attributes.bootstrap.BootstrapMethod = (
+                        blocks_cf.bootstrap_methods[const.method_attr_index]
+                    )
+
+                    for arg_idx in bootstrap_method.bootstrap_args:
+                        arg_value = blocks_cf.constants._pool[arg_idx]
+                        print(' arg:', arg_idx, arg_value)
+
+                    # print('method_data.args', method_data.args)
+                    # print('method_data.name', method_data.name)
+                    # print(
+                    #     'method_data._descriptor_index', method_data._descriptor_index
+                    # )
+                    # print('method_data._name_index', method_data._name_index)
+
+                    try:
+                        # the args look like this:
+                        # 0: <MethodType(index=8773,descriptor=<UTF8(index=221, value='(Ljava/lang/Object;)Ljava/lang/Object;'>))>
+                        # 1: <MethodHandle(index=9504, reference=<MethodReference(index=9505,class_=<ConstantClass(index=9506, name=<UTF8(index=9507, value='net/minecraft/world/level/block/IronBarsBlock'>))>,name_and_type=<NameAndType(index=1075,name=<UTF8(index=5, value='<init>'>),descriptor=<UTF8(index=1076, value='(Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V'>))>)>)>
+                        # 2: <MethodType(index=9512,descriptor=<UTF8(index=9513, value='(Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)Lnet/minecraft/world/level/block/IronBarsBlock;'>))>
+
+                        # line 22653
+
+                        arg_1_idx = bootstrap_method.bootstrap_args[1]
+                        arg_1_value: jawa.constants.MethodHandle = (
+                            blocks_cf.constants._pool[arg_1_idx]
+                        )
+                        try:
+                            synthetic_method = blocks_cf.constants._pool[
+                                arg_1_value.reference.index
+                            ]
+                            print('synthetic_method', synthetic_method)
+                        except Exception as e:
+                            print('err', e)
+                        class_name = arg_1_value.reference.class_.name.value
+                        print('meow!!!!', class_name)
                     except AttributeError:
                         return object()
 
