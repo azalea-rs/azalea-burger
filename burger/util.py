@@ -461,7 +461,7 @@ def try_eval_lambda(ins, args, cf):
     return walk_method(cf, lambda_method, Callback(), args)
 
 
-def string_from_invokedymanic(ins, cf):
+def string_from_invokedynamic(ins, cf):
     """
     Gets the recipe string, if this is a string concatenation implemented via invokedynamic.
     """

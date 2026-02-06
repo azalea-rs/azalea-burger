@@ -10,7 +10,7 @@ from burger.util import (
     InvokeDynamicInfo,
     LambdaInvokeDynamicInfo,
     WalkerCallback,
-    string_from_invokedymanic,
+    string_from_invokedynamic,
     walk_method,
 )
 
@@ -61,30 +61,10 @@ class EntityMetadataTopping(Topping):
             and m.args[0].name == entity_data_accessor_class
         )
 
-        # net.minecraft.network.syncher.EntityDataSerializers
-        entity_data_serializers_class = None
-        for ins in define_method.code.disassemble():
-            # The code looks up an ID and throws an exception if it's not registered
-            # We want the class that it looks the ID up in
-            if ins == 'invokestatic':
-                const = ins.operands[0]
-                candidate_class = const.class_.name.value
-                if not candidate_class.startswith('java/'):
-                    entity_data_serializers_class = candidate_class
-            elif entity_data_serializers_class and ins in ('ldc', 'ldc_w'):
-                const = ins.operands[0]
-                if const == 'Unregistered serializer ':
-                    break
-            elif entity_data_serializers_class and ins == 'invokedynamic':
-                text = string_from_invokedymanic(ins, synched_entity_data_builder_cf)
-                if 'Unregistered serializer ' in text:
-                    break
-        else:
-            raise Exception('Failed to identify dataserializers')
-
-        assert not entity_data_serializers_class.startswith('java/'), (
-            f'entity_data_serializers_class should not be a java class: {entity_data_serializers_class}'
+        entity_data_serializers_class = (
+            'net/minecraft/network/syncher/EntityDataSerializers'
         )
+        assert classloader[entity_data_serializers_class]
 
         base_entity_class = entities['~abstract_entity']['class']
         base_entity_cf = classloader[base_entity_class]
