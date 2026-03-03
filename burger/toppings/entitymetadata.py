@@ -43,11 +43,9 @@ class EntityMetadataTopping(Topping):
         synched_entity_data_class = aggregate['classes']['metadata']
         synched_entity_data_cf = classloader[synched_entity_data_class]
 
-        # get the SynchedEntityData.Builder class, which happens to be the first inner class
-        synched_entity_data_builder_class = synched_entity_data_cf.constants.find_one(
-            type_=ConstantClass,
-            f=lambda c: c.name.value.startswith(synched_entity_data_class + '$'),
-        ).name.value
+        synched_entity_data_builder_class = (
+            'net/minecraft/network/syncher/SynchedEntityData$Builder'
+        )
         synched_entity_data_builder_cf = classloader[synched_entity_data_builder_class]
 
         define_id_method = synched_entity_data_cf.methods.find_one(
@@ -57,8 +55,9 @@ class EntityMetadataTopping(Topping):
         entity_data_serializer_class = define_id_method.args[1].name
 
         define_method = synched_entity_data_builder_cf.methods.find_one(
-            f=lambda m: len(m.args) == 2
-            and m.args[0].name == entity_data_accessor_class
+            f=lambda m: (
+                len(m.args) == 2 and m.args[0].name == entity_data_accessor_class
+            )
         )
 
         entity_data_serializers_class = (
@@ -68,28 +67,10 @@ class EntityMetadataTopping(Topping):
 
         base_entity_class = entities['~abstract_entity']['class']
         base_entity_cf = classloader[base_entity_class]
-        define_synched_data_method_name = None
-        define_synched_data_method_desc = None
-        # The last call in the base entity constructor is to registerData() (formerly entityInit())
-        for ins in base_entity_cf.methods.find_one(name='<init>').code.disassemble():
-            if ins.mnemonic == 'invokevirtual':
-                const = ins.operands[0]
-                candidate_method = base_entity_cf.methods.find_one(
-                    name=const.name_and_type.name.value,
-                    f=lambda m: m.descriptor == const.name_and_type.descriptor,
-                )
-                # protected void defineSynchedData(SynchedEntityData.Builder var1)
-                if (
-                    candidate_method
-                    and len(candidate_method.args) == 1
-                    and candidate_method.args[0].name
-                    == synched_entity_data_builder_class
-                ):
-                    define_synched_data_method_name = const.name_and_type.name.value
-                    define_synched_data_method_desc = (
-                        const.name_and_type.descriptor.value
-                    )
-                    # Keep looping, to find the last call
+        define_synched_data_method_name = 'defineSynchedData'
+        define_synched_data_method_desc = (
+            '(Lnet/minecraft/network/syncher/SynchedEntityData$Builder;)V'
+        )
 
         dataserializers = EntityMetadataTopping.identify_serializers(
             classloader,
@@ -670,6 +651,11 @@ class EntityMetadataTopping(Topping):
             inner_type = inner_type[inner_type.index('<') + 1 : inner_type.rindex('>')][
                 1:-1
             ]
+        if '<' in inner_type:
+            inner_type = inner_type.split('<')[-1]
+            if inner_type[0] == 'L':
+                inner_type = inner_type[1:]
+            inner_type = inner_type.strip(':>;')
 
         if inner_type.startswith('java/lang/'):
             name = inner_type[len('java/lang/') :]
