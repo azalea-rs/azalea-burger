@@ -4,13 +4,12 @@ import traceback
 import six
 from jawa.cf import ClassFile
 from jawa.classloader import ClassLoader
-from jawa.constants import ConstantClass, String
+from jawa.constants import String
 
 from burger.util import (
     InvokeDynamicInfo,
     LambdaInvokeDynamicInfo,
     WalkerCallback,
-    string_from_invokedynamic,
     walk_method,
 )
 
@@ -168,15 +167,10 @@ class EntityMetadataTopping(Topping):
                 index = ctx.cur_index
 
             class MetadataDefaultsContext(WalkerCallback):
-                def __init__(self, wait_for_putfield=False):
+                def __init__(self):
                     self.textcomponentstring = None
-                    # True while waiting for "this.dataManager = new EntityDataManager(this);" when going through the entity constructor
-                    self.waiting_for_putfield = wait_for_putfield
 
                 def on_invoke(self, ins, const, obj, args):
-                    if self.waiting_for_putfield:
-                        return
-
                     if 'Optional' in const.class_.name.value:
                         if const.name_and_type.name in ('absent', 'empty'):
                             return 'Empty'
@@ -201,6 +195,10 @@ class EntityMetadataTopping(Topping):
 
                         return
                     elif const.class_.name == synched_entity_data_builder_class:
+                        if const.name_and_type.name.value == 'build':
+                            # this is called near the end of Entity's <init>
+                            return
+
                         assert const.name_and_type.name == define_method.name
                         assert (
                             const.name_and_type.descriptor == define_method.descriptor
@@ -223,26 +221,19 @@ class EntityMetadataTopping(Topping):
                     ):
                         # Call to super.registerData()
                         return
+                    elif const.name_and_type.name.value == 'getMaxAirSupply':
+                        # hardcoded so we don't have to simulate a call to the function (which is
+                        # just a single return). this might be worth improving if there end up
+                        # being more functions like it, though.
+                        return 300
 
                 def on_invokedynamic(self, ins, const, args):
-                    # used in Wolf for
-                    # var1.define(DATA_VARIANT_ID, var3.get(WolfVariants.DEFAULT).or(var3::getAny).orElseThrow());
-
-                    return
+                    pass
 
                 def on_put_field(self, ins, const, obj, value):
-                    if (
-                        const.name_and_type.descriptor
-                        == 'L' + synched_entity_data_builder_class + ';'
-                    ):
-                        if not self.waiting_for_putfield:
-                            raise Exception('Unexpected putfield: %s' % (ins,))
-                        self.waiting_for_putfield = False
+                    pass
 
                 def on_get_field(self, ins, const, obj):
-                    if self.waiting_for_putfield:
-                        return
-
                     if (
                         const.name_and_type.descriptor
                         == 'L' + entity_data_accessor_class + ';'
@@ -273,15 +264,15 @@ class EntityMetadataTopping(Topping):
                         return None
 
                 def on_new(self, ins, const):
-                    if self.waiting_for_putfield:
-                        return
-
                     if const.name.value == 'org/joml/Quaternionf':
                         return {'x': 0, 'y': 0, 'z': 0, 'w': 1}
                     elif const.name.value == 'org/joml/Vector3f':
                         return {'x': 0, 'y': 0, 'z': 0}
 
-                    elif self.textcomponentstring is None:
+                    elif (
+                        self.textcomponentstring is None
+                        and const.name.value.startswith('net/minecraft/')
+                    ):
                         # Check if this is TextComponentString
                         temp_cf = classloader[const.name.value]
                         for str in temp_cf.constants.find(type_=String):
@@ -299,12 +290,12 @@ class EntityMetadataTopping(Topping):
                 f=lambda m: m.descriptor == define_synched_data_method_desc,
             )
             if register and not register.access_flags.acc_abstract:
-                walk_method(cf, register, MetadataDefaultsContext(False))
+                walk_method(cf, register, MetadataDefaultsContext())
             elif cls == base_entity_class:
                 walk_method(
                     cf,
                     cf.methods.find_one(name='<init>'),
-                    MetadataDefaultsContext(True),
+                    MetadataDefaultsContext(),
                 )
 
             get_flag_method = None
