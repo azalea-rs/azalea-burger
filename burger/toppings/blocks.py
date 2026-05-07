@@ -139,6 +139,9 @@ class BlocksTopping(Topping):
         light_setter = properties_cf.methods.find_one(name='lightLevel')
         assert light_setter
 
+        offset_type_setter = properties_cf.methods.find_one(name='offsetType')
+        assert offset_type_setter
+
         register_legacy_stair = blocks_cf.methods.find_one(
             name='registerLegacyStair',
             args='Ljava/lang/String;Lnet/minecraft/world/level/block/Block;',
@@ -355,6 +358,11 @@ class BlocksTopping(Topping):
                         and method_desc == friction_setter.descriptor.value
                     ):
                         obj['friction'] = args[0]
+                    elif (
+                        method_name == offset_type_setter.name.value
+                        and method_desc == offset_type_setter.descriptor.value
+                    ):
+                        obj['offset_type'] = args[0]
                     elif method_name == '<init>':
                         # Call to the constructor for the block
                         # The majority of blocks have a 1-arg constructor simply taking the builder.
@@ -409,6 +417,12 @@ class BlocksTopping(Topping):
                     # Light level lambda, used by candles.  Not something we
                     # can evaluate (it depends on the block state).
                     return None
+                elif (
+                    const.name_and_type.descriptor
+                    == 'Lnet/minecraft/world/level/block/state/BlockBehaviour$OffsetType;'
+                ):
+                    # the OffsetType variant name, like "XZ" or "XYZ"
+                    return const.name_and_type.name.value
                 else:
                     return object()
 
@@ -488,7 +502,6 @@ class BlocksTopping(Topping):
                         except Exception as e:
                             print('err', e)
                         class_name = arg_1_value.reference.class_.name.value
-                        print('meow!!!!', class_name)
                     except AttributeError:
                         return object()
 
