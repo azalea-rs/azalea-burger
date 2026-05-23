@@ -1,16 +1,17 @@
-# Fork info
+A tool for extracting data from the jar file for the latest Minecraft snapshot.
 
-This is a maintained fork of Burger that only targets the latest Minecraft
-snapshot (but may coincidentally work on other new versions). It was created
-for use in [Azalea](https://github.com/azalea-rs/azalea)'s code generator, so
-features that aren't necessary for that purpose will not be maintained and
-might be removed in the future.
+This is a fork of Burger, which was maintained by TkTech and pokechu22.
+This fork exists for use in [Azalea](https://github.com/azalea-rs/azalea)'s
+code generator, so features that aren't necessary for that purpose will not be
+maintained and may be removed in the future.
 
-# Burger
+Unlike upstream, this fork is not designed to work on old Minecraft versions
+(but in some cases it may coincidentally still partially work).
 
-Burger is a "framework" for automatically extracting data from the Minecraft
-game for the purpose of writing the protocol specification, interoperability,
-and other neat uses.
+You are encouraged to use azalea-burger in conjunction with
+[azalea-pumpkin-extractor](https://github.com/azalea-rs/azalea-pumpkin-extractor)
+and the
+[vanilla data generator](https://minecraft.wiki/w/Tutorial:Running_the_data_generator).
 
 ## The Idea
 

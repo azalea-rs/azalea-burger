@@ -46,10 +46,6 @@ MATCHES = (
     (['ResourceKey['], 'resourcekey'),
 )
 
-# Enforce a lower priority on some matches, since some classes may match both
-# these and other strings, which we want to be grouped with the other string
-# if it exists, and with this if it doesn't
-MAYBE_MATCHES = ((['Skipping Entity with id'], 'entity.list'),)
 
 # In some cases there really isn't a good way to verify that it's a specific
 # class and we need to just depend on it coming first (bad!)
@@ -112,8 +108,13 @@ def identify(classloader: ClassLoader, path: str):
     we'll have the initial mapping from this pass available to us.
     """
 
-    if path == 'net/minecraft/network/chat/Component':
-        return 'chatcomponent', path
+    CLASSES_TO_BURGER_IDS = {
+        'net/minecraft/network/chat/Component': 'chatcomponent',
+        'net/minecraft/world/level/block/Blocks': 'block.list',
+        'net/minecraft/world/entity/EntityTypes': 'entity.list',
+    }
+    if path in CLASSES_TO_BURGER_IDS:
+        return CLASSES_TO_BURGER_IDS[path], path
 
     possible_match = None
     for c in classloader.search_constant_pool(path=path, type_=(String, ConstantClass)):
@@ -124,12 +125,6 @@ def identify(classloader: ClassLoader, path: str):
                 if check_match(value, match_list):
                     class_file = classloader[path]
                     return match_name, class_file.this.name.value
-
-            for match_list, match_name in MAYBE_MATCHES:
-                if check_match(value, match_list):
-                    class_file = classloader[path]
-                    possible_match = (match_name, class_file.this.name.value)
-                    # Continue searching through the other constants in the class
 
             if value == 'ambient.cave':
                 # This is found in both the sounds list class and sounds event class.
@@ -142,28 +137,6 @@ def identify(classloader: ClassLoader, path: str):
                         return 'sounds.list', class_file.this.name.value
                 else:
                     return 'sounds.event', class_file.this.name.value
-
-            if value == 'piston_head':
-                # piston_head is a technical block, which is important as that means it has no item form.
-                # This constant is found in both the block list class and the class containing block registrations.
-                class_file = classloader[path]
-
-                for c2 in class_file.constants.find(type_=String):
-                    if c2 == 'doTileDrops':
-                        # not in the list, only in registry
-                        return 'block.register', class_file.this.name.value
-                for c2 in class_file.constants.find(type_=String):
-                    if c2 == 'Tesselating block in world':
-                        # Rendering code, which we don't care about
-                        return
-                for c2 in class_file.constants.find(type_=ConstantClass):
-                    if c2.name == 'com/mojang/serialization/MapCodec':
-                        # In 23w40a (1.20.3), a BlockTypes class was added that handles the codec for blocks,
-                        # which duplicates all of the block identifier strings. As a pretty awful
-                        # heuristic, ignore classes that reference the codec. Note that the codec
-                        # system isn't obfuscated.
-                        return
-                return 'block.list', class_file.this.name.value
 
             if value == 'diamond_pickaxe':
                 # Similarly, diamond_pickaxe is only an item.  This exists in 3 classes, though:
@@ -342,7 +315,6 @@ class IdentifyTopping(Topping):
         'identify.biome.list',
         'identify.biome.register',
         'identify.block.list',
-        'identify.block.register',
         'identify.block.references',
         'identify.blockstatecontainer',
         'identify.blockstate',
@@ -413,8 +385,6 @@ class IdentifyTopping(Topping):
         # since the registration class is also the list class
         if 'sounds.list' not in classes and 'sounds.event' in classes:
             classes['sounds.list'] = classes['sounds.event']
-        if 'block.list' not in classes and 'block.register' in classes:
-            classes['block.list'] = classes['block.register']
         if 'item.list' not in classes and 'item.register' in classes:
             classes['item.list'] = classes['item.register']
         if 'biome.list' not in classes and 'biome.register' in classes:

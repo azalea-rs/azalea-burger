@@ -575,11 +575,6 @@ class EntityMetadataTopping(Topping):
                 if name is not None:
                     value['name'] = name
 
-                # Perform decompilation
-                # In new versions (at the latest 24w09b), all metadata fields
-                # are codecs now, so decompilation doesn't work (and thus has been commented out)
-
-                # EntityMetadataTopping._decompile_serializer(classloader, classloader[value["class"]], classes, value, thunks, value["special_fields"])
                 del value['special_fields']
 
                 self.serializers_by_field[field] = value
@@ -700,41 +695,3 @@ class EntityMetadataTopping(Topping):
             return name_prefix + name
         else:
             return None
-
-    @staticmethod
-    def _decompile_serializer(
-        classloader: ClassLoader,
-        cf: ClassFile,
-        classes,
-        serializer,
-        thunks,
-        special_fields,
-    ):
-        # In here because otherwise the import messes with finding the topping in this file
-        from .packetinstructions import PACKETBUF_NAME
-        from .packetinstructions import PacketInstructionsTopping as _PIT
-
-        # Decompile the serialization code.
-        # Note that we are using the bridge method that takes an object,
-        # and not the more specific method that for the given serializer which is
-        # called by that bridge (_PIT.operations will inline that call for us)
-        try:
-            write_args = 'L' + classes['packet.packetbuffer'] + ';Ljava/lang/Object;'
-            methods = list(cf.methods.find(returns='V', args=write_args))
-            assert len(methods) == 1
-            operations = _PIT.operations(
-                classloader,
-                cf,
-                classes,
-                methods[0],
-                ('this', PACKETBUF_NAME, 'value'),
-                thunks,
-                special_fields,
-            )
-            serializer.update(_PIT.format(operations))
-        except Exception:
-            logging.debug(
-                f'Failed to process operations for metadata serializer {serializer}'
-            )
-            if logging.root.isEnabledFor(logging.DEBUG):
-                traceback.print_exc()

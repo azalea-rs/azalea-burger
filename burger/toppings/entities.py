@@ -39,33 +39,10 @@ class EntityTopping(Topping):
         entities = aggregate.setdefault('entities', {})
         entity = entities.setdefault('entity', {})
 
-        # Find the inner builder class
-        inner_classes = cf.attributes.find_one(name='InnerClasses').inner_classes
-        builderclass = None
-        funcclass = None  # 19w08a+ - a functional interface for creating new entities
-        for entry in inner_classes:
-            if entry.outer_class_info_index == 0:
-                # Ignore anonymous classes
-                continue
-
-            outer = cf.constants.get(entry.outer_class_info_index)
-            if outer.name == listclass:
-                inner = cf.constants.get(entry.inner_class_info_index)
-                inner_cf = classloader[inner.name.value]
-                if inner_cf.access_flags.acc_interface:
-                    if funcclass:
-                        raise Exception('Unexpected multiple inner interfaces')
-                    funcclass = inner.name.value
-                else:
-                    if builderclass:
-                        raise Exception('Unexpected multiple inner classes')
-                    builderclass = inner.name.value
-
-        if not builderclass:
-            raise Exception(
-                'Failed to find inner class for builder in ' + str(inner_classes)
-            )
-        # Note that funcclass might not be found since it didn't always exist
+        builder_class = 'net/minecraft/world/entity/EntityType$Builder'
+        assert classloader[builder_class]
+        func_class = 'net/minecraft/world/entity/EntityType$EntityFactory'
+        assert classloader[func_class]
 
         method = cf.methods.find_one(name='<clinit>')
 
@@ -114,7 +91,7 @@ class EntityTopping(Topping):
 
                     entity[name] = new_entity
                     return new_entity
-                elif const.class_.name == builderclass:
+                elif const.class_.name == builder_class:
                     if ins.mnemonic != 'invokestatic':
                         if (
                             const.name_and_type.name.value == set_size_method.name
@@ -148,7 +125,7 @@ class EntityTopping(Topping):
                             cls = args[1]
                         elif (
                             desc.args[0].name == 'java/util/function/Function'
-                            or desc.args[0].name == funcclass
+                            or desc.args[0].name == func_class
                         ):
                             # Builder.create(Function, EntityCategory), 19w05a+
                             cls = args[0]
