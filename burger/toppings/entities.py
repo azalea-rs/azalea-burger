@@ -299,3 +299,4 @@ class EntityTopping(Topping):
         abstract_entity('piglin', 'piglin')  # AbstractChestedHorse
         abstract_entity('avatar', 'mannequin')  # Avatar
         abstract_entity('nautilus', 'zombie_nautilus')  # AbstractNautilus
+        abstract_entity('cube_mob', 'magma_cube')  # AbstractCubeMob
